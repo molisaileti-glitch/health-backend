@@ -1,0 +1,20 @@
+# Core Django
+Django==5.0
+
+# API Framework
+djangorestframework==3.15.1
+
+# Production Web Server (Gunicorn) - THIS WAS MISSING
+gunicorn
+
+# Firebase for Authentication
+firebase-admin==6.2.0
+
+# HTTP requests library
+requests==2.31.0
+
+# Database Connector
+psycopg2-binary==2.9.7
+
+# CORS for allowing Flutter app to connect
+django-cors-headers==4.0.0
