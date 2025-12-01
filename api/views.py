@@ -1,176 +1,97 @@
-# api/views.py
-import json
-import os
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.db import transaction
+from rest_framework import generics, permissions, status
+from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
-from django.contrib.auth.models import User
-from django.conf import settings
+from .models import Request, Offer, DoctorProfile
+from .serializers import RequestSerializer, DoctorProfileSerializer
 
-from .models import DoctorRequest, Offer, FCMToken
-from .serializers import DoctorRequestSerializer, OfferSerializer
+# Handles Doctor Registration
+class DoctorRegistrationView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
-# firebase admin messaging (preferred)
-import firebase_admin
-from firebase_admin import messaging, credentials
+    def post(self, request, *args, **kwargs):
+        # This assumes the Firestore registration is no longer used,
+        # and we register the doctor profile in our Django backend.
+        serializer = DoctorProfileSerializer(data=request.data)
+        if serializer.is_valid():
+            # Ensure a doctor can't register twice
+            DoctorProfile.objects.update_or_create(
+                user=request.user,
+                defaults=serializer.validated_data
+            )
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# ensure firebase admin initialized
-if not firebase_admin._apps:
-    key_path = getattr(settings, "FIREBASE_CREDENTIAL_PATH", None)
-    if key_path and os.path.exists(key_path):
-        cred = credentials.Certificate(key_path)
-        firebase_admin.initialize_app(cred)
+# Handles GET for all open requests (for Doctors) and POST to create a request (for Patients)
+class RequestListCreateView(generics.ListCreateAPIView):
+    serializer_class = RequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-def send_push_to_token(token: str, title: str, body: str, data: dict = None):
-    """
-    Use firebase_admin.messaging to send notification to a single device token
-    """
-    if not token:
-        return
-    message = messaging.Message(
-        notification=messaging.Notification(title=title, body=body),
-        token=token,
-        data=data or {}
-    )
-    try:
-        messaging.send(message)
-    except Exception as e:
-        # fail silently but log
-        print("FCM send error:", e)
+    def get_queryset(self):
+        # Only return requests that are currently 'open'
+        return Request.objects.filter(status='open')
 
+    def perform_create(self, serializer):
+        # When a patient POSTs, automatically assign them as the patient
+        serializer.save(patient=self.request.user)
 
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def health(request):
-    return Response({"ok": True, "message": "API up"})
+# Handles POST for a doctor to create an offer on a specific request
+class OfferCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request, request_id):
+        try:
+            target_request = Request.objects.get(id=request_id, status='open')
+        except Request.DoesNotExist:
+            return Response({"error": "Request not found or is already closed."}, status=status.HTTP_404_NOT_FOUND)
 
-# Save or update FCM token for current user
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def save_fcm_token(request):
-    token = request.data.get("token")
-    if not token:
-        return Response({"error": "token missing"}, status=status.HTTP_400_BAD_REQUEST)
-
-    obj, created = FCMToken.objects.update_or_create(user=request.user, defaults={"token": token})
-    return Response({"saved": True})
-
-
-# Create patient request (patient posts request)
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def create_request(request):
-    symptoms = request.data.get("symptoms", "")
-    lat = request.data.get("latitude")
-    lng = request.data.get("longitude")
-    address = request.data.get("address", "")
-
-    dr = DoctorRequest.objects.create(
-        patient=request.user,
-        symptoms=symptoms,
-        latitude=lat,
-        longitude=lng,
-        address=address,
-        status="open",
-    )
-
-    # Optionally: notify all doctors (if you have doctor tokens) or nearby doctors logic.
-    # For MVP we'll not broadcast; doctors poll /doctor/requests/ to see new ones.
-
-    serializer = DoctorRequestSerializer(dr)
-    return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-
-# List requests for the authenticated patient (their own requests)
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def list_patient_requests(request):
-    qs = DoctorRequest.objects.filter(patient=request.user).order_by("-created_at")
-    ser = DoctorRequestSerializer(qs, many=True)
-    return Response(ser.data)
-
-
-# List open requests for doctors to view (doctors will call this)
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def list_open_requests(request):
-    qs = DoctorRequest.objects.filter(status="open").order_by("created_at")
-    ser = DoctorRequestSerializer(qs, many=True)
-    return Response(ser.data)
-
-
-# Doctor creates an Offer for a patient request
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def create_offer(request, request_id):
-    try:
-        dr = DoctorRequest.objects.get(id=request_id)
-    except DoctorRequest.DoesNotExist:
-        return Response({"error": "request not found"}, status=status.HTTP_404_NOT_FOUND)
-
-    price = request.data.get("price")
-    eta = request.data.get("eta_minutes") or request.data.get("eta")
-    message = request.data.get("message", "")
-
-    # basic validation
-    if price is None or eta is None:
-        return Response({"error": "price and eta_minutes required"}, status=status.HTTP_400_BAD_REQUEST)
-
-    offer = Offer.objects.create(
-        request=dr,
-        doctor=request.user,
-        price=int(price),
-        eta_minutes=int(eta),
-        message=message
-    )
-
-    # Notify patient by FCM
-    try:
-        token_obj = FCMToken.objects.get(user=dr.patient)
-        send_push_to_token(
-            token_obj.token,
-            title="New Offer",
-            body=f"A doctor has offered to visit you (TZS {price}).",
-            data={"type": "new_offer", "offer_id": str(offer.id), "request_id": str(dr.id)}
+        # Create the offer for the logged-in doctor
+        Offer.objects.create(
+            request=target_request,
+            doctor=request.user,
+            price=request.data.get('price'),
+            eta_minutes=request.data.get('eta_minutes'),
+            message=request.data.get('message', '')
         )
-    except FCMToken.DoesNotExist:
-        pass
+        return Response({"message": "Offer submitted successfully."}, status=status.HTTP_201_CREATED)
 
-    return Response(OfferSerializer(offer).data, status=status.HTTP_201_CREATED)
+# Handles POST for a patient to accept an offer, which closes the loop
+class OfferAcceptView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request, offer_id):
+        try:
+            offer_to_accept = Offer.objects.get(id=offer_id, status='pending')
+        except Offer.DoesNotExist:
+            return Response({"error": "Offer not found or already handled."}, status=status.HTTP_404_NOT_FOUND)
 
-# Patient accepts an offer
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def accept_offer(request, offer_id):
-    try:
-        offer = Offer.objects.get(id=offer_id)
-    except Offer.DoesNotExist:
-        return Response({"error": "offer not found"}, status=status.HTTP_404_NOT_FOUND)
+        parent_request = offer_to_accept.request
+        # Security Check: Ensure the user accepting is the patient who made the request
+        if parent_request.patient != request.user:
+            return Response({"error": "You do not have permission to accept this offer."}, status=status.HTTP_403_FORBIDDEN)
 
-    # make sure the request belongs to the current patient
-    if offer.request.patient != request.user:
-        return Response({"error": "not allowed"}, status=status.HTTP_403_FORBIDDEN)
+        # Use a transaction to ensure all database changes succeed or fail together
+        with transaction.atomic():
+            parent_request.status = 'closed'
+            parent_request.save()
 
-    # mark offer accepted and close request
-    offer.accepted = True
-    offer.save()
-    offer.request.status = "accepted"
-    offer.request.save()
+            offer_to_accept.status = 'accepted'
+            offer_to_accept.save()
 
-    # notify doctor who made this offer
-    try:
-        token_obj = FCMToken.objects.get(user=offer.doctor)
-        send_push_to_token(
-            token_obj.token,
-            title="Offer Accepted",
-            body="Your offer was accepted by the patient.",
-            data={"type": "offer_accepted", "offer_id": str(offer.id), "request_id": str(offer.request.id)}
-        )
-    except FCMToken.DoesNotExist:
-        pass
+            # Reject all other pending offers for this request
+            parent_request.offers.filter(status='pending').update(status='rejected')
+        
+        # TODO: Send a push notification to the doctor (`offer_to_accept.doctor`)
 
-    # Optionally notify other doctors that the request is closed (not implemented)
-    return Response({"accepted": True})
+        # Return the critical info needed for the live map
+        return Response({
+            "message": "Offer accepted. The request is now closed.",
+            "request_id": parent_request.id,
+            "patient_location": {
+                "latitude": str(parent_request.latitude),
+                "longitude": str(parent_request.longitude)
+            },
+            "doctor_location": { # In a real app, get this from the doctor's last known location
+                 "latitude": "0.0", "longitude": "0.0"
+            }
+        }, status=status.HTTP_200_OK)

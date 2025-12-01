@@ -1,16 +1,16 @@
-# api/urls.py
-#trigger new deployment
 from django.urls import path
 from . import views
 
 urlpatterns = [
-    path("healthz/", views.health, name="healthz"),
-    path("health/", views.health, name="health"),
-    path("save-fcm-token/", views.save_fcm_token, name="save_fcm_token"),
-    path("requests/create/", views.create_request, name="create_request"),
-    path("requests/", views.list_patient_requests, name="list_patient_requests"),
-    path("doctor/requests/", views.list_open_requests, name="list_open_requests"),  # doctors poll this
-    path("requests/<int:request_id>/offer/", views.create_offer, name="create_offer"),
-    path("offers/<int:offer_id>/accept/", views.accept_offer, name="accept_offer"),
+    # For doctors to register their profile
+    path('doctors/register/', views.DoctorRegistrationView.as_view(), name='doctor-register'),
     
+    # For doctors to GET open requests, and for patients to POST a new request
+    path('requests/', views.RequestListCreateView.as_view(), name='request-list-create'),
+    
+    # For a doctor to POST an offer on a specific request
+    path('requests/<int:request_id>/offers/', views.OfferCreateView.as_view(), name='offer-create'),
+    
+    # For a patient to POST to accept an offer
+    path('offers/<int:offer_id>/accept/', views.OfferAcceptView.as_view(), name='offer-accept'),
 ]

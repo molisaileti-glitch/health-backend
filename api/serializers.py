@@ -1,24 +1,33 @@
-# api/serializers.py
 from rest_framework import serializers
-from .models import DoctorRequest, Offer
+from .models import Request, Offer, DoctorProfile
+
+class DoctorProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorProfile
+        fields = ['full_name', 'phone_number', 'region']
 
 class OfferSerializer(serializers.ModelSerializer):
-    doctor_name = serializers.SerializerMethodField()
-    doctor_id = serializers.IntegerField(source="doctor.id", read_only=True)
-    doctor_username = serializers.CharField(source="doctor.username", read_only=True)
+    # Include the doctor's name from their profile
+    doctor_name = serializers.CharField(source='doctor.doctor_profile.full_name', read_only=True)
+    doctor_id = serializers.IntegerField(source='doctor.id', read_only=True)
 
     class Meta:
         model = Offer
-        fields = ["id", "doctor_id", "doctor_username", "price", "eta_minutes", "message", "accepted", "created_at"]
+        # We only need to send price, eta, and message from the app
+        fields = ['id', 'doctor_id', 'doctor_name', 'price', 'eta_minutes', 'message', 'status']
+        read_only_fields = ['id', 'doctor_id', 'doctor_name', 'status']
 
-    def get_doctor_name(self, obj):
-        return obj.doctor.username
-
-class DoctorRequestSerializer(serializers.ModelSerializer):
+class RequestSerializer(serializers.ModelSerializer):
+    # This nests the list of offers within each request, which patient_waiting_page needs
     offers = OfferSerializer(many=True, read_only=True)
-    patient_id = serializers.IntegerField(source="patient.id", read_only=True)
-    patient_username = serializers.CharField(source="patient.username", read_only=True)
+    patient_name = serializers.CharField(source='patient.username', read_only=True)
 
     class Meta:
-        model = DoctorRequest
-        fields = ["id", "patient_id", "patient_username", "symptoms", "latitude", "longitude", "address", "status", "created_at", "offers"]
+        model = Request
+        fields = ['id', 'patient_name', 'symptoms', 'status', 'created_at', 'offers', 'latitude', 'longitude']
+        # The app will send latitude and longitude, but they are not part of the main list view
+        extra_kwargs = {
+            'latitude': {'write_only': True},
+            'longitude': {'write_only': True},
+        }
+
