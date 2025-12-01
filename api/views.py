@@ -95,3 +95,12 @@ class OfferAcceptView(APIView):
                  "latitude": "0.0", "longitude": "0.0"
             }
         }, status=status.HTTP_200_OK)
+    # PASTE THIS CODE AT THE END OF api/views.py
+
+class HealthCheckView(APIView):
+    permission_classes = [permissions.AllowAny] # This makes it public
+
+    def get(self, request, *args, **kwargs):
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+
