@@ -80,10 +80,12 @@ class OfferAcceptView(APIView):
 
             # Reject all other pending offers for this request
             parent_request.offers.filter(status='pending').update(status='rejected')
-        
-        # TODO: Send a push notification to the doctor (`offer_to_accept.doctor`)
 
-        # Return the critical info needed for the live map
+        # --- THIS IS THE KEY FIX ---
+        # 1. Get the profile of the doctor who made the accepted offer
+        doctor_profile = offer_to_accept.doctor.doctor_profile
+
+        # 2. Return the real location from that profile
         return Response({
             "message": "Offer accepted. The request is now closed.",
             "request_id": parent_request.id,
@@ -91,16 +93,14 @@ class OfferAcceptView(APIView):
                 "latitude": str(parent_request.latitude),
                 "longitude": str(parent_request.longitude)
             },
-            "doctor_location": { # In a real app, get this from the doctor's last known location
-                 "latitude": "0.0", "longitude": "0.0"
+            "doctor_location": {
+                 "latitude": str(doctor_profile.latitude),
+                 "longitude": str(doctor_profile.longitude)
             }
         }, status=status.HTTP_200_OK)
-    # PASTE THIS CODE AT THE END OF api/views.py
 
 class HealthCheckView(APIView):
     permission_classes = [permissions.AllowAny] # This makes it public
 
     def get(self, request, *args, **kwargs):
         return Response({"status": "ok"}, status=status.HTTP_200_OK)
-
-

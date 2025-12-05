@@ -8,7 +8,10 @@ class DoctorProfile(models.Model):
     full_name = models.CharField(max_length=255)
     phone_number = models.CharField(max_length=20)
     region = models.CharField(max_length=100)
-    
+    # --- ADDED THESE TWO LINES ---
+    latitude = models.FloatField(default=0.0)
+    longitude = models.FloatField(default=0.0)
+
     def __str__(self):
         return f"Dr. {self.full_name}"
 

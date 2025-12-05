@@ -4,7 +4,8 @@ from .models import Request, Offer, DoctorProfile
 class DoctorProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorProfile
-        fields = ['full_name', 'phone_number', 'region']
+        # --- ADDED 'latitude' and 'longitude' TO THIS LIST ---
+        fields = ['full_name', 'phone_number', 'region', 'latitude', 'longitude']
 
 class OfferSerializer(serializers.ModelSerializer):
     # Include the doctor's name from their profile
@@ -30,4 +31,3 @@ class RequestSerializer(serializers.ModelSerializer):
             'latitude': {'write_only': True},
             'longitude': {'write_only': True},
         }
-
