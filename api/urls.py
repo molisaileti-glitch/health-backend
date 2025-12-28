@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path,include
 from . import views
 
 urlpatterns = [
@@ -14,4 +14,6 @@ urlpatterns = [
     
     # For a patient to POST to accept an offer
     path('offers/<int:offer_id>/accept/', views.OfferAcceptView.as_view(), name='offer-accept'),
+     # should be handled by the subscriptions/urls.py file.
+    path('subscriptions/', include('subscriptions.urls')),
 ]
