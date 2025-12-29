@@ -1,0 +1,33 @@
+# =========================
+# Python
+# =========================
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.sqlite3
+
+# =========================
+# Virtual Environments
+# =========================
+venv/
+env/
+
+# =========================
+# Django
+# =========================
+local_settings.py
+db.sqlite3
+
+# =========================
+# Firebase / Secrets
+# =========================
+serviceAccountKey.json
+
+# =========================
+# OS / Editor files
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
