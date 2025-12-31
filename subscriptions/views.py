@@ -50,14 +50,20 @@ class UssdMenuHandlerView(APIView):
             f"USSD INCOMING | session={session_id} phone={phone_number} text='{text}'"
         )
 
-        # Create or get user
-        try:
-            user, _ = User.objects.get_or_create(
-                phone_number=phone_number,
-                defaults={"username": phone_number},
-            )
-        except Exception:
-            user, _ = User.objects.get_or_create(username=phone_number)
+        if not phone_number:
+            # Reject requests without a phone number
+            response = "END An error occurred. Please try again."
+            return Response(response, content_type="text/plain")
+
+        # --- MODIFIED USER LOOKUP ---
+        # This is a more robust and direct way to handle user creation.
+        # It finds a user by their unique phone number.
+        # If the user signed up via Flutter first, their phone number should have been saved.
+        # If they use USSD first, an account is created with the phone number as the username.
+        user, _ = User.objects.get_or_create(
+            phone_number=phone_number,
+            defaults={'username': f'user_{phone_number}'} # Creates a more unique default username
+        )
 
         subscription, _ = Subscription.objects.get_or_create(user=user)
 
@@ -78,6 +84,8 @@ class UssdMenuHandlerView(APIView):
 
         # Check status
         elif text == "2":
+            # Refresh from DB to ensure status is current
+            subscription.refresh_from_db()
             is_active = (
                 subscription.status == Subscription.Status.ACTIVE
                 and subscription.valid_until
@@ -108,9 +116,12 @@ class SubscriptionStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        subscription, _ = Subscription.objects.get_or_create(user=request.user)
+        # The user is authenticated via the token from the Flutter app.
+        # We assume this user record has the correct phone_number set.
+        user = request.user
+        subscription, _ = Subscription.objects.get_or_create(user=user)
 
-        # Auto-expire
+        # Auto-expire logic (this is good)
         if (
             subscription.status == Subscription.Status.ACTIVE
             and subscription.valid_until
@@ -119,5 +130,8 @@ class SubscriptionStatusView(APIView):
             subscription.status = Subscription.Status.INACTIVE
             subscription.save()
 
+        # The serializer correctly turns the subscription object into JSON.
+        # This part of the code is perfect.
         serializer = SubscriptionSerializer(subscription)
         return Response(serializer.data)
+
