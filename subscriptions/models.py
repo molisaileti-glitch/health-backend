@@ -1,15 +1,53 @@
 from django.db import models
 from django.conf import settings
+from django.contrib.auth.models import AbstractUser
 
+# ====================================================================
+# CUSTOM USER MODEL
+# ====================================================================
+class CustomUser(AbstractUser):
+    """
+    Custom user model to include additional fields like phone_number and fcm_token.
+    """
+    # Your existing phone_number field
+    phone_number = models.CharField(max_length=20, unique=True, blank=True, null=True)
+    
+    # --- ADDED THIS NEW FIELD ---
+    # This field will store the Firebase Cloud Messaging token for push notifications.
+    fcm_token = models.TextField(blank=True, null=True)
+    groups = models.ManyToManyField(
+       'auth.Group',
+       verbose_name
+       ='groups',
+        blank=True,
+        help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.',
+        related_name="customuser_set",
+        related_query_name="user",
+    )
+    user_permissions = models.ManyToManyField(
+        'auth.Permission',
+         verbose_name='user permissions',
+        blank=True,
+        help_text='Specific permissions for this user.',
+        related_name="customuser_set",
+        related_query_name="user",
+    )
+
+    def __str__(self):
+        return self.username
+
+# ====================================================================
+# SUBSCRIPTION MODEL
+# ====================================================================
 class Subscription(models.Model):
     """
     Manages the subscription status for each user of the AfyaPlus service.
     """
     class Status(models.TextChoices):
-        INACTIVE = 'INACTIVE', 'Inactive'  # User has never subscribed or has canceled and can re-subscribe.
-        ACTIVE = 'ACTIVE', 'Active'      # User is currently subscribed and paid up.
-        PAUSED = 'PAUSED', 'Paused'      # Grace period ended due to payment failure; benefits suspended.
-        CANCELED = 'CANCELED', 'Canceled'  # User actively chose to stop the service.
+        INACTIVE = 'INACTIVE', 'Inactive'
+        ACTIVE = 'ACTIVE', 'Active'
+        PAUSED = 'PAUSED', 'Paused'
+        CANCELED = 'CANCELED', 'Canceled'
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,

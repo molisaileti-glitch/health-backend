@@ -1,15 +1,17 @@
 # subscriptions/urls.py
 
 from django.urls import path
-from .views import UssdMenuHandlerView, SubscriptionStatusView # <-- Add SubscriptionStatusView here
-
-# --- Only import the one view that actually exists in your views.py file ---
-from .views import UssdMenuHandlerView
+# --- EDIT THIS LINE ---
+from .views import UssdMenuHandlerView, SubscriptionStatusView, SaveFcmTokenView 
 
 urlpatterns = [
-    # This is the only URL pattern we need right now for the backend.
-    # It creates the endpoint for Africa's Talking to send USSD requests.
+    # This path remains unchanged
     path('ussd-menu/', UssdMenuHandlerView.as_view(), name='ussd-menu-handler'),
-     # --- ADD THIS NEW URL FOR THE FLUTTER APP ---
+     
+    # This path also remains unchanged. It handles /api/subscriptions/status/
     path('status/', SubscriptionStatusView.as_view(), name='subscription-status'),
+    
+    # --- ADD THIS NEW PATH ---
+    # This will handle requests to /api/subscriptions/save-fcm-token/
+    path('save-fcm-token/', SaveFcmTokenView.as_view(), name='save-fcm-token'),
 ]

@@ -135,3 +135,29 @@ class SubscriptionStatusView(APIView):
         serializer = SubscriptionSerializer(subscription)
         return Response(serializer.data)
 
+
+# ==================================================
+# FCM TOKEN SAVING API (Flutter) --- NEW CLASS
+# ==================================================
+class SaveFcmTokenView(APIView):
+    """
+    Saves or updates the FCM token for the authenticated user.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        token = request.data.get('token')
+        
+        if not token:
+            # If no token is provided in the request body, return a client error
+            return Response({'error': 'FCM token not provided'}, status=400)
+
+        # Get the currently authenticated user from the request
+        user = request.user
+        
+        # Save the provided token to the user's record
+        user.fcm_token = token
+        user.save(update_fields=['fcm_token'])
+        
+        # Return a success response to the Flutter app
+        return Response({'status': 'FCM token saved successfully'}, status=200)
