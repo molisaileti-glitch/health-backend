@@ -11,7 +11,4 @@ urlpatterns = [
     # This path also remains unchanged. It handles /api/subscriptions/status/
     path('status/', SubscriptionStatusView.as_view(), name='subscription-status'),
     
-    # --- ADD THIS NEW PATH ---
-    # This will handle requests to /api/subscriptions/save-fcm-token/
-    path('save-fcm-token/', SaveFcmTokenView.as_view(), name='save-fcm-token'),
 ]
