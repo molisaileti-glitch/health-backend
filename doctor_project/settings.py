@@ -23,7 +23,8 @@ INSTALLED_APPS = [
 
     # local
     "api",
-    "subscriptions", # <-- 1. ADD THIS LINE
+    "subscriptions",
+     # <-- 1. ADD THIS LINE
 ]
 
 MIDDLEWARE = [
